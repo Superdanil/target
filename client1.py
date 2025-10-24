@@ -1,9 +1,10 @@
 import asyncio
+import datetime
 import os
 
 import websockets
 
-CHUNK_SIZE = 1024  # размер чанка в байтах
+CHUNK_SIZE = 256  # в байтах
 
 
 async def send_file(ws, file_path: str):
@@ -26,7 +27,7 @@ async def receive_responses(ws):
     """Получение mock-транскриптов от сервера"""
     try:
         async for message in ws:
-            print(f"🧠 Ответ сервера: ", message)
+            print(datetime.datetime.now(), f"🧠 Ответ сервера: ", message)
     except websockets.exceptions.ConnectionClosed:
         print("🔌 Соединение закрыто сервером.")
 
