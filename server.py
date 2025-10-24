@@ -19,15 +19,16 @@ class WebServer:
             except queue.Empty:
                 continue
             print(f"➡ Получено из response_queue: {message}")
-            json_: str = json.dumps(message)
-            await loop.sock_sendall(connection, json_.encode("utf-8"))
+            if message["error"]:
+                message["text"] = "Ошибка обработки данных"
+            await loop.sock_sendall(connection, message["text"].encode("utf-8"))
 
     async def _receive_audio(self, connection: socket, loop: AbstractEventLoop) -> None:
         address = connection.getpeername()
         try:
             while audio := await loop.sock_recv(connection, 1024):
                 print("Получены данные: ", audio)
-                message = {"address": address, "audio": audio}
+                message = {"error": False, "address": address, "audio": audio}
                 await asyncio.to_thread(self.request_queue.put, message)
                 print("request_queue.qsize() =", self.request_queue.qsize())
         except Exception as exc:

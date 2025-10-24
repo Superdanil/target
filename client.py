@@ -1,4 +1,3 @@
-import json
 import socket
 import time
 
@@ -28,8 +27,8 @@ def main():
             # Получаем ответ
             data = client_socket.recv(1024)
             end = time.monotonic()
-            text: str = json.loads(data.decode("utf-8"))["text"]
-            print(f"↘️ Получено: {text} за {end - start} сек")
+            text: str = data.decode("utf-8")
+            print(f"↘️ Получено: '{text}' за {end - start} сек")
         except KeyboardInterrupt:
             client_socket.close()
             print("\n🛑 Соединение закрыто")
