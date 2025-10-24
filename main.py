@@ -11,9 +11,7 @@ from routers import router as ws_router, response_forwarder
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state._stop_event = asyncio.Event()
-    app.state._response_task = asyncio.create_task(response_forwarder(app.state.response_queue, app.state._stop_event))
-    print("✅ app startup complete")
+    app.state._response_task = asyncio.create_task(response_forwarder(app.state.response_queue))
     yield
 
 

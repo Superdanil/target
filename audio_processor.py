@@ -1,31 +1,26 @@
-import time
+import asyncio
 from multiprocessing import Queue
+from typing import Any
+
+from logger import logger
 
 
 class AudioProcessor:
-    """
-    Работает в отдельном процессе. Блокирующе читает request_queue,
-    делает mock-обработку и кладет результат в response_queue.
-    """
+    """Асинхронный обработчик, работающий в отдельном процессе."""
 
-    def __init__(self, request_queue: Queue, response_queue: Queue, processing_time: float = 5) -> None:
+    def __init__(self, request_queue: Queue, response_queue: Queue, processing_time: float = 5.0):
         self.request_queue = request_queue
         self.response_queue = response_queue
         self.processing_time = processing_time
 
-    def _process_once(self, message: dict):
-        """
-        Синхронная обработка одного сообщения.
-        message: {"client_id": str, "audio": bytes}
-        Положит в response_queue: {"client_id": str, "text": str}
-        """
+    async def _process_once(self, message: dict) -> dict[str, Any]:
+        """Асинхронная обработка одного аудио-сообщения."""
         client_id = message.get("client_id")
         audio = message.get("audio", b"")
-        # mock-транскрипт: просто uppercase текста (без ошибок)
         try:
-            text = audio.decode("utf-8", errors="ignore").upper()
+            await asyncio.sleep(self.processing_time)  # имитация транскрипции
 
-            time.sleep(self.processing_time)  # имитация бурной деятельности
+            text = audio.decode("utf-8", errors="ignore").strip().upper()
 
             result = {"client_id": client_id, "text": f"MOCK: {text}"}
             self.response_queue.put(result)
@@ -33,12 +28,20 @@ class AudioProcessor:
             # если ошибка, возвращаем сообщение об ошибке
             self.response_queue.put({"client_id": client_id, "error": True, "text": str(exc)})
 
-    def run(self):
-        print("🔧 AudioProcessor запущен", )
+    async def _read_queue(self):
+        """
+        Асинхронно читает blocking multiprocessing.Queue с помощью to_thread.
+        Каждое сообщение отправляется в отдельную задачу (_process_once).
+        """
         while True:
-            # блокирующий get: процесс просто ждёт задач
-            message = self.request_queue.get()
+            message = await asyncio.to_thread(self.request_queue.get)
             if message is None:
                 break
-            self._process_once(message)
-        print("🔧 AudioProcessor остановлен")
+
+            asyncio.create_task(self._process_once(message))
+            await asyncio.sleep(0.1)
+
+    def run(self):
+        """Точка входа для multiprocessing.Process. Запускает event loop и async-задачи внутри процесса."""
+        logger.info("AudioProcessor процесс запущен")
+        asyncio.run(self._read_queue())
