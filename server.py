@@ -22,11 +22,12 @@ class WebServer:
             if message["error"]:
                 message["text"] = "Ошибка обработки данных"
             await loop.sock_sendall(connection, message["text"].encode("utf-8"))
+            print("Отправил ", message["text"].encode("utf-8"))
 
     async def _receive_audio(self, connection: socket, loop: AbstractEventLoop) -> None:
         address = connection.getpeername()
         try:
-            while audio := await loop.sock_recv(connection, 1024):
+            while audio := await loop.sock_recv(connection, 2):
                 print("Получены данные: ", audio)
                 message = {"error": False, "address": address, "audio": audio}
                 await asyncio.to_thread(self.request_queue.put, message)

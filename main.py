@@ -1,35 +1,47 @@
 import asyncio
-from multiprocessing import Process, Queue, freeze_support
+from contextlib import asynccontextmanager
+from multiprocessing import Process, Queue
 
-from handler import AudioProcessor
-from server import WebServer
+import uvicorn
+from fastapi import FastAPI
 
-
-def run_webserver(request_queue, response_queue) -> None:
-    loop = asyncio.get_event_loop()
-    webserver = WebServer(request_queue, response_queue)
-    loop.run_until_complete(webserver.start())
-    loop.close()
+from audio_processor import AudioProcessor
+from routers import router as ws_router, response_forwarder
 
 
-def run_audio_processor(request_queue, response_queue) -> None:
-    loop = asyncio.get_event_loop()
-    audio_processor = AudioProcessor(request_queue, response_queue)
-    loop.run_until_complete(audio_processor.start())
-    loop.close()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state._stop_event = asyncio.Event()
+    app.state._response_task = asyncio.create_task(response_forwarder(app.state.response_queue, app.state._stop_event))
+    print("✅ app startup complete")
+    yield
 
 
-async def main() -> None:
-    request_queue = Queue()
-    response_queue = Queue()
+def create_app(request_queue, response_queue, audio_proc):
+    app = FastAPI(title="WS server", lifespan=lifespan)
+    app.include_router(ws_router)
+    app.state.request_queue = request_queue
+    app.state.response_queue = response_queue
+    app.state.audio_process = audio_proc
+    return app
 
-    audio_process = Process(target=run_audio_processor, args=(request_queue, response_queue))
-    webserver_process = Process(target=run_webserver, args=(request_queue, response_queue))
 
-    audio_process.start()
-    webserver_process.start()
+def run_audio_process(request_queue: Queue, response_queue: Queue) -> None:
+    proc = AudioProcessor(request_queue, response_queue, processing_time=5)
+    proc.run()
+
+
+def main() -> None:
+    request_queue: Queue = Queue()
+    response_queue: Queue = Queue()
+
+    audio_proc = Process(target=run_audio_process, args=(request_queue, response_queue), daemon=True)
+    audio_proc.start()
+
+    app = create_app(request_queue, response_queue, audio_proc)
+
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
 
 
 if __name__ == "__main__":
-    freeze_support()
-    asyncio.run(main())
+    main()
