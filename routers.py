@@ -1,56 +1,11 @@
-import asyncio
-import json
 import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from logger import logger
+from ws_manager import ws_manager
 
 router = APIRouter()
-
-
-class WSManager:
-    """Хранит активные websocket-соединения (client_id -> WebSocket)."""
-
-    def __init__(self):
-        self._conns: dict[str, WebSocket] = {}
-        self._lock = asyncio.Lock()
-
-    async def connect(self, client_id: str, websocket: WebSocket):
-        async with self._lock:
-            self._conns[client_id] = websocket
-
-    async def disconnect(self, client_id: str):
-        async with self._lock:
-            self._conns.pop(client_id, None)
-
-    async def send(self, client_id: str, payload: dict):
-        async with self._lock:
-            ws = self._conns.get(client_id)
-        if not ws:
-            return
-        try:
-            await ws.send_text(json.dumps(payload))
-        except Exception:
-            await self.disconnect(client_id)
-
-
-ws_manager = WSManager()
-
-
-async def response_forwarder(response_queue):
-    """Слушает очередь и форвардит ответы клиентам."""
-    while True:
-        try:
-            message = await asyncio.to_thread(response_queue.get)
-            if message is None:
-                break
-            client_id = message.get("client_id")
-            if client_id:
-                await ws_manager.send(client_id, message)
-        except Exception as exc:
-            logger.error("Ошибка в response_queue: %s", exc)
-            await asyncio.sleep(0.05)
 
 
 @router.websocket("/ws")

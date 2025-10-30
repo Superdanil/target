@@ -29,11 +29,8 @@ class AudioProcessor:
             logger.error("Ошибка обработки данных: %s", exc)
             self.response_queue.put({"client_id": client_id, "error": True, "text": "Ошибка обработки данных"})
 
-    async def _read_queue(self):
-        """
-        Асинхронно читает blocking multiprocessing.Queue с помощью to_thread.
-        Каждое сообщение отправляется в отдельную задачу (_process_once).
-        """
+    async def _read_queue(self) -> None:
+        """Конкурентно читает request_queue. Каждое сообщение отправляется в отдельную задачу."""
         while True:
             message = await asyncio.to_thread(self.request_queue.get)
             if message is None:
@@ -42,7 +39,7 @@ class AudioProcessor:
             asyncio.create_task(self._process_once(message))
             await asyncio.sleep(0.1)
 
-    def run(self):
+    def run(self) -> None:
         """Точка входа для multiprocessing.Process. Запускает event loop и async-задачи внутри процесса."""
         logger.info("AudioProcessor процесс запущен")
         asyncio.run(self._read_queue())
